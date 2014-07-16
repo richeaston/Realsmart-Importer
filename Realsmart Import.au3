@@ -72,16 +72,28 @@ Else
 EndIf
 
 
-
 GUICtrlCreateGroup("", -99, -99, 1, 1)
 $save = GUICtrlCreateButton("Save Details", 8, 352, 80, 25)
 $task = GUICtrlCreateButton("Create Task", 93, 352, 80, 25)
 ;checks of realsmart button and enables task button if present
-if FileExists(@scriptdir & "\realsmart.log") then
-	guictrlsetstate($task, $GUI_ENABLE)
+$st = @ScriptDir & "\st.tmp"
+runwait(@ComSpec & " /c " & 'schtasks /Query /TN realsmart-import >> ' & $st , "", @SW_SHOW)
+
+
+if fileexists($st) Then
+	$sttest = filereadline($st, 5)
+	if StringInStr($st, "Ready") Then
+		;disables task button
+		guictrlsetstate($task, $GUI_DISABLE)
+		FileRecycle($st)
+	Else
+		guictrlsetstate($task, $GUI_ENABLE)
+		FileRecycle($st)
+	EndIf
 Else
-	GUICtrlSetState($task, $GUI_DISABLE)
+	guictrlsetstate($task, $GUI_ENABLE)
 EndIf
+
 $exe = GUICtrlCreateButton("Execute Import", 178, 352, 80, 25)
 ;check of realsmart log, and disables the execute button if present
 if not FileExists(@scriptdir & "\realsmart.log") then
@@ -98,20 +110,28 @@ While 1
 		Case $GUI_EVENT_CLOSE
 			Exit
 		case $task
-			;creates scheduled task on server/workstation that runs daily at 06:00
-			Runwait(@ComSpec & " /c " & 'SchTasks /Create /SC DAILY /RL HIGHEST /RU SYSTEM /TN Realsmart-import /TR "' & @scriptdir & '\realsmart.exe ' & $SUi & ' ' & $SPi & ' ' & $SKi & ' https://www.rlsmart.net/webservices" /ST 06:00' , @scriptdir, @SW_hide)
-			;check to see if scheduled task was created correctly
-			runwait(@ComSpec & " /c " & 'SchTasks /Query /TN Realsmart-import >> ' & @scriptdir & '\ST.txt' , @scriptdir, @SW_hide)
-			$sttest = filereadline(@scriptdir & "\st.txt", 5)
-			if stringinstr($sttest, "READY") = true Then
-				Msgbox(64, "Success", "Realsmart scheduled task has been created and will run at 06:00 everyday")
-				FileRecycle(@scriptdir & "\st.txt")
-				;disables task button
-				guictrlsetstate($task, $GUI_DISABLE)
-			Else
-				Msgbox(48, "Warning!", "Realsmart scheduled task was not created, please make sure you have the correct rights to create tasks")
-				FileRecycle(@scriptdir & "\st.txt")
-			endif
+			runwait(@ComSpec & " /c " & 'SchTasks /Query /TN Realsmart-import >> ' & $st , @scriptdir, @SW_hide)
+			$sttest = filereadline($st, 5)
+			if stringinstr($sttest, "ERROR:") Then
+				;creates scheduled task on server/workstation that runs daily at 06:00
+				Runwait(@ComSpec & " /c " & 'SchTasks /Create /SC DAILY /RL HIGHEST /RU SYSTEM /TN Realsmart-import /TR "' & @scriptdir & '\realsmart.exe ' & $SUi & ' ' & $SPi & ' ' & $SKi & ' https://www.rlsmart.net/webservices" /ST 06:00' , @scriptdir, @SW_hide)
+				;check to see if scheduled task was created correctly
+				runwait(@ComSpec & " /c " & 'SchTasks /Query /TN Realsmart-import >> ' & $st , @scriptdir, @SW_hide)
+				$sttest = filereadline($st, 5)
+				if stringinstr($sttest, "READY") = true Then
+					Msgbox(64, "Success", "Realsmart scheduled task has been created and will run at 06:00 everyday")
+					FileRecycle($st)
+					;disables task button
+					guictrlsetstate($task, $GUI_DISABLE)
+				Else
+					Msgbox(48, "Warning!", "Realsmart scheduled task was not created, please make sure you have the correct rights to create tasks")
+					FileRecycle($st)
+				endif
+			elseif stringinstr($sttest, "READY") = true Then
+					Msgbox(48, "Warning!", "Realsmart scheduled task was not created, as it already exists")
+					FileRecycle($st)
+			EndIf
+
 		case $save
 			;read inputs for data
 			$SU = guictrlread($SU)
